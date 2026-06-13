@@ -1,0 +1,170 @@
+import { Link } from "react-router-dom";
+import { useMemo, useState, useEffect } from "react";
+import { ArrowUpDown, Eye, Filter, Search, Loader2 } from "lucide-react";
+import { type RiskLevel } from "@/lib/mock-data";
+import { RiskBadge, RiskScore } from "@/components/risk-badge";
+import { SectionHeader } from "@/components/section-header";
+
+const levels: (RiskLevel | "all")[] = ["all", "critical", "high", "medium", "low"];
+
+export default function Users() {
+  const [q, setQ] = useState("");
+  const [filter, setFilter] = useState<RiskLevel | "all">("all");
+  const [sortDesc, setSortDesc] = useState(true);
+  const [users, setUsers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+    setIsLoading(true);
+    fetch(`${baseUrl}/users`)
+      .then((res) => res.json())
+      .then((data) => {
+        const parsedArray = Array.isArray(data) ? data : [];
+        const normalized = parsedArray.map((u: any) => ({
+          id: String(u.user_id || u.id || ""),
+          name: u.username || u.name || "Unknown User",
+          email: u.email || `${u.username || "user"}@company.com`,
+          department: u.department || "Unassigned",
+          location: u.location || "Remote",
+          riskScore: Number(u.riskScore || u.risk_score || 50),
+          riskLevel: (u.riskLevel || u.risk_level || "medium").toLowerCase() as RiskLevel,
+          alerts: Number(u.alerts || u.activityCount || 0),
+          status: u.status || "active",
+          lastActivity: u.lastActivity || u.timestamp || "Recent"
+        }));
+        setUsers(normalized);
+      })
+      .catch((err) => {
+        console.error("Failed to sync queue data: ", err);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, []);
+
+  const rows = useMemo(() => {
+    return users
+      .filter((u) => filter === "all" || u.riskLevel === filter)
+      .filter(
+        (u) =>
+          !q ||
+          u.name.toLowerCase().includes(q.toLowerCase()) ||
+          u.email.toLowerCase().includes(q.toLowerCase()) ||
+          u.id.includes(q),
+      )
+      .sort((a, b) => (sortDesc ? b.riskScore - a.riskScore : a.riskScore - b.riskScore));
+  }, [users, q, filter, sortDesc]);
+
+  return (
+    <div className="mx-auto max-w-[1600px] px-6 py-8">
+      
+
+      <div className="glass-panel rounded-xl border border-border bg-background/50 backdrop-blur-md">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search user, email, ID…"
+              className="h-8 w-72 rounded-md border border-border bg-muted/40 pl-8 pr-3 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div className="flex items-center gap-1 rounded-md border border-border bg-muted/40 p-0.5">
+            {levels.map((l) => (
+              <button
+                key={l}
+                onClick={() => setFilter(l)}
+                className={`rounded px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest transition ${filter === l ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            <Filter className="h-3 w-3" /> {rows.length} of {users.length}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/30 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              <tr>
+                <th className="px-4 py-2.5 text-left">User</th>
+                <th className="px-4 py-2.5 text-left">Department</th>
+                <th className="px-4 py-2.5 text-left">Location</th>
+                <th className="px-4 py-2.5 text-left">
+                  <button onClick={() => setSortDesc((s) => !s)} className="inline-flex items-center gap-1 hover:text-foreground">
+                    Risk Score <ArrowUpDown className="h-3 w-3" />
+                  </button>
+                </th>
+                <th className="px-4 py-2.5 text-left">Level</th>
+                <th className="px-4 py-2.5 text-right">Alerts</th>
+                <th className="px-4 py-2.5 text-left">Status</th>
+                <th className="px-4 py-2.5 text-left">Last Activity</th>
+                <th className="px-4 py-2.5"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr>
+                  <td colSpan={9} className="py-20 text-center">
+                    <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      <span className="font-mono text-[10px] uppercase tracking-widest">Waking up database instances...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-16 text-center font-mono text-xs text-muted-foreground">
+                    No high-risk vectors detected matching criteria.
+                  </td>
+                </tr>
+              ) : (
+                rows.map((u) => {
+                  const initials = u.name
+                    .trim()
+                    .split(/\s+/)
+                    .map((n: string) => n[0])
+                    .join("")
+                    .substring(0, 2);
+                  return (
+                    <tr key={u.id} className="border-t border-border transition hover:bg-muted/30">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-primary/40 to-chart-5/40 font-mono text-[10px] font-semibold uppercase">
+                            {initials || "??"}
+                          </div>
+                          <div>
+                            <div className="font-medium">{u.name}</div>
+                            <div className="font-mono text-[10px] text-muted-foreground">{u.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{u.department}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{u.location}</td>
+                      <td className="px-4 py-3"><RiskScore score={u.riskScore} /></td>
+                      <td className="px-4 py-3"><RiskBadge level={u.riskLevel} /></td>
+                      <td className="px-4 py-3 text-right font-mono tabular-nums">{u.alerts}</td>
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{u.status}</span>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{u.lastActivity}</td>
+                      <td className="px-4 py-3 text-right">
+                        <Link to={`/users/${u.id}`} className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest text-primary hover:bg-primary/20">
+                          <Eye className="h-3 w-3" /> Investigate
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
