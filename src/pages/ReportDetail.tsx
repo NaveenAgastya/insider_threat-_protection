@@ -1,150 +1,289 @@
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, BrainCircuit, CheckCircle2, Download, FileText, Share2, Sparkles } from "lucide-react";
-import { getReport } from "@/lib/mock-data";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  BrainCircuit,
+  CheckCircle2,
+  Download,
+  FileText,
+  Share2,
+  Sparkles,
+} from "lucide-react";
 import { RiskBadge } from "@/components/risk-badge";
 
-const sections = [
-  {
-    title: "Executive Summary",
-    body: "Subject exhibits a high-confidence pattern consistent with deliberate data exfiltration. Across the past 72 hours, Sentinel observed converging signals: off-hours authentication from a new geography, an 6.1× spike in outbound data volume, and use of unsanctioned cloud storage. No collaborator overlap explains the behavior. Recommend immediate session containment and HR/Legal escalation.",
-  },
-  {
-    title: "Key Findings",
-    bullets: [
-      "Transferred 4.2 GB to a personal Dropbox endpoint over TLS, bypassing CASB inspection via OAuth refresh token.",
-      "Authentication from Singapore at 03:14 UTC; no travel ticket on file and last known location is Berlin.",
-      "Bulk-downloaded 1,247 documents from the Finance SharePoint between 21:00–23:00 over four consecutive nights.",
-      "Disabled endpoint backup agent and cleared local browser history twice in 24 hours.",
-    ],
-  },
-  {
-    title: "Adversary Tradecraft Alignment",
-    body: "Behavior maps to MITRE ATT&CK techniques T1567.002 (Exfiltration to Cloud Storage), T1078 (Valid Accounts), and T1070.004 (Indicator Removal). Pacing and OPSEC discipline suggest an informed insider rather than commodity malware.",
-  },
-];
+const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
-const actions = [
-  { label: "Revoke active sessions and rotate credentials", priority: "critical" as const },
-  { label: "Quarantine endpoint and image disk for forensics", priority: "critical" as const },
-  { label: "Engage HR and Legal under insider-threat playbook IT-04", priority: "high" as const },
-  { label: "Issue CASB block on personal Dropbox tenant", priority: "high" as const },
-  { label: "Expand monitoring on Finance department peer group", priority: "medium" as const },
-];
+type Report = {
+  id: string;
+  user_id: string;
+  confidence: number;
+  severity: "critical" | "high" | string;
+  title: string;
+  generated: string;
+  summary: string;
+};
 
-function Stat({ label, value, accent }: { label: string; value: string; accent: string }) {
-  return (
-    <div className="rounded-lg border border-border bg-muted/30 p-3">
-      <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className="mt-1 text-lg font-semibold tabular-nums" style={{ color: accent }}>{value}</div>
-    </div>
-  );
+type UserDetails = {
+  user_id: string;
+  username: string;
+  department: string;
+  riskFactors: string[];
+  activityCount: number;
+};
+
+type Activity = {
+  timestamp?: string;
+  resource?: string;
+  resource_sensitivity?: string;
+  action?: string;
+  time_classification?: string;
+  [k: string]: unknown;
+};
+
+function generateNarrative(user: UserDetails | null, activities: Activity[]) {
+  if (!user) return "Generating AI investigation narrative...";
+
+  const highSensitivity = activities.filter(a => a.resource_sensitivity === "high").length;
+  const exports = activities.filter(a => a.action === "export_data").length;
+  const adminOps = activities.filter(a => a.action === "admin_operation").length;
+  const nightAccess = activities.filter(
+    a => a.time_classification === "night" || a.time_classification === "unusual_hours"
+  ).length;
+
+  return `Subject: ${user.username}
+Department: ${user.department}
+Observed Activities: ${activities.length}
+High Sensitivity Accesses: ${highSensitivity}
+Export Operations: ${exports}
+Administrative Actions: ${adminOps}
+Off-Hours Activity: ${nightAccess}
+
+Assessment:
+The user accessed enterprise resources requiring analyst review. Activity patterns indicate elevated operational risk.
+
+Recommended Actions:
+• Review sensitive resource access
+• Verify export activity
+• Confirm admin actions
+• Continue monitoring`;
+}
+
+function buildActions(user: UserDetails | null, activities: Activity[]) {
+  if (!user) return [];
+  const actions: { label: string; priority: "critical" | "high" | "medium" }[] = [];
+
+  if (activities.some(a => a.action === "export_data" && a.resource_sensitivity === "high")) {
+    actions.push({ label: "Revoke active sessions and rotate credentials", priority: "critical" });
+    actions.push({ label: "Quarantine endpoint and image disk for forensics", priority: "critical" });
+  }
+  if (activities.some(a => a.action === "admin_operation")) {
+    actions.push({ label: "Review administrative operations performed", priority: "high" });
+  }
+  if (activities.some(a => ["night", "weekend", "unusual_hours"].includes(String(a.time_classification)))) {
+    actions.push({ label: "Investigate off-hours access patterns", priority: "high" });
+  }
+  if (user.riskFactors?.length) {
+    actions.push({ label: `Address ${user.riskFactors.length} flagged risk factor(s)`, priority: "medium" });
+  }
+  if (actions.length === 0) {
+    actions.push({ label: "Continue routine monitoring", priority: "medium" });
+  }
+  return actions;
+}
+
+function buildEvidence(activities: Activity[]) {
+  const counts: Record<string, number> = {};
+  for (const a of activities) {
+    const key = String(a.resource ?? "unknown");
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]);
 }
 
 export default function ReportDetail() {
   const { reportId = "" } = useParams();
-  const report = getReport(reportId);
+  const [report, setReport] = useState<Report | null>(null);
+  const [userDetails, setUserDetails] = useState<UserDetails | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
+
+  useEffect(() => {
+  if (!reportId) return;
+
+  console.log("Report ID from URL:", reportId);
+
+  fetch(`${baseUrl}/reports/${reportId}`)
+    .then(res => {
+      console.log("Status:", res.status);
+      return res.json();
+    })
+    .then(data => {
+      console.log("Report Data:", data);
+      setReport(data);
+    })
+    .catch(console.error);
+
+}, [reportId]);
+
+const [loading, setLoading] = useState(true);
+
+useEffect(() => {
+  if (!reportId) return;
+
+  setLoading(true);
+
+  fetch(`${baseUrl}/reports/${reportId}`)
+    .then(res => {
+      if (!res.ok) throw new Error();
+      return res.json();
+    })
+    .then(setReport)
+    .catch(() => setReport(null))
+    .finally(() => setLoading(false));
+}, [reportId]);
+
+if (loading) {
+  return <div className="p-6">Loading...</div>;
+}
+
+if (!report) {
+  return (
+    <div className="p-6">
+      <h2>Report not found</h2>
+      <p>{reportId}</p>
+    </div>
+  );
+}
+
+  useEffect(() => {
+    if (!report?.user_id) return;
+    Promise.all([
+      fetch(`${baseUrl}/user/${report.user_id}`).then(r => r.json()),
+      fetch(`${baseUrl}/user/${report.user_id}/activities`).then(r => r.json()),
+    ])
+      .then(([u, a]) => {
+        setUserDetails(u);
+        setActivities(Array.isArray(a) ? a : []);
+      })
+      .catch(console.error);
+  }, [report]);
+
+  const aiNarrative = useMemo(
+    () => generateNarrative(userDetails, activities),
+    [userDetails, activities]
+  );
+  const actions = useMemo(() => buildActions(userDetails, activities), [userDetails, activities]);
+  const evidence = useMemo(() => buildEvidence(activities), [activities]);
+
+  if (!report) {
+    return <div className="p-6 text-sm text-muted-foreground">Loading report...</div>;
+  }
 
   return (
-    <div className="mx-auto max-w-[1400px] px-6 py-8">
-      <Link to="/reports" className="mb-4 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-3 w-3" /> All reports
+    <div className="p-6 space-y-6">
+      <Link to="/reports" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="h-4 w-4" /> All reports
       </Link>
 
-      <div className="glass-panel scan-line rounded-xl p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <RiskBadge level={report.severity} />
-              <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{report.id}</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-primary ring-1 ring-inset ring-primary/30">
-                <Sparkles className="h-3 w-3" /> AI-generated
-              </span>
-            </div>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight">{report.title}</h1>
-            <div className="mt-1 font-mono text-[11px] text-muted-foreground">
-              Subject: {report.user} · Generated {report.generated}
-            </div>
+      <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <FileText className="h-4 w-4" />
+            <span>{report.id}</span>
+            <span className="inline-flex items-center gap-1">
+              <Sparkles className="h-3 w-3" /> AI-generated
+            </span>
+            <RiskBadge level={report.severity as any} />
           </div>
-          <div className="flex items-center gap-2">
-            <button className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs hover:bg-muted">
-              <Share2 className="h-3.5 w-3.5" /> Share
-            </button>
-            <button className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:opacity-90">
-              <Download className="h-3.5 w-3.5" /> Export PDF
-            </button>
-          </div>
+          <h1 className="text-2xl font-semibold">{report.title}</h1>
+          <p className="text-sm text-muted-foreground">
+            Subject: {userDetails?.username ?? report.user_id} · Generated {report.generated} ·
+            Confidence {Math.round(report.confidence * 100)}%
+          </p>
         </div>
-
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat label="Confidence" value={`${Math.round(report.confidence * 100)}%`} accent="var(--primary)" />
-          <Stat label="Severity" value={report.severity.toUpperCase()} accent="var(--critical)" />
-          <Stat label="Signals Fused" value="38" accent="var(--info)" />
-          <Stat label="Time to Insight" value="4.2s" accent="var(--success)" />
+        <div className="flex gap-2">
+          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+            <Share2 className="h-4 w-4" /> Share
+          </button>
+          <button className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">
+            <Download className="h-4 w-4" /> Export PDF
+          </button>
         </div>
-      </div>
+      </header>
 
-      <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
-        <article className="glass-panel space-y-6 rounded-xl p-6 lg:col-span-2">
-          {sections.map((s) => (
-            <section key={s.title}>
-              <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-primary">
-                <FileText className="h-3.5 w-3.5" /> {s.title}
-              </h2>
-              {s.body && <p className="mt-2 text-sm leading-relaxed text-foreground/90">{s.body}</p>}
-              {s.bullets && (
-                <ul className="mt-2 space-y-1.5">
-                  {s.bullets.map((b, i) => (
-                    <li key={i} className="flex gap-2 text-sm text-foreground/90">
-                      <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary" />
-                      <span>{b}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          ))}
-
-          <section>
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-primary">
-              <BrainCircuit className="h-3.5 w-3.5" /> Analyst Notes
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-6">
+          <section className="rounded-lg border p-5">
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
+              <BrainCircuit className="h-5 w-5" /> AI Incident Narrative
             </h2>
-            <div className="mt-2 rounded-lg border border-dashed border-border bg-muted/20 p-4 font-mono text-xs leading-relaxed text-muted-foreground">
-              {">"} Cross-reference with Finance access reviews from Q2.{"\n"}
-              {">"} Confirm Singapore IP belongs to commercial residential proxy pool.{"\n"}
-              {">"} Pending: pull Slack DMs for collaborator overlap (legal hold approved).
+            <pre className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{aiNarrative}</pre>
+          </section>
+
+          <section className="rounded-lg border p-5">
+            <h2 className="text-lg font-semibold">Summary</h2>
+            <p className="mt-2 text-sm text-muted-foreground">{report.summary}</p>
+          </section>
+
+          {userDetails?.riskFactors?.length ? (
+            <section className="rounded-lg border p-5">
+              <h2 className="text-lg font-semibold">Risk Factors</h2>
+              <ul className="mt-3 space-y-2 text-sm">
+                {userDetails.riskFactors.map((f, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          <section className="rounded-lg border p-5">
+            <h2 className="text-lg font-semibold">Recent Activities ({activities.length})</h2>
+            <div className="mt-3 max-h-96 overflow-auto text-sm">
+              {activities.slice(0, 50).map((a, i) => (
+                <div key={i} className="border-b py-2">
+                  <div className="font-medium">{a.action} · {a.resource}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {a.timestamp} · sensitivity: {a.resource_sensitivity} · {a.time_classification}
+                  </div>
+                </div>
+              ))}
+              {activities.length === 0 && (
+                <p className="text-muted-foreground">No activities recorded.</p>
+              )}
             </div>
           </section>
-        </article>
+        </div>
 
-        <aside className="space-y-3">
-          <div className="glass-panel rounded-xl p-5">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-success" />
-              <div className="text-sm font-medium">Recommended Actions</div>
-            </div>
-            <ul className="mt-3 space-y-2">
+        <aside className="space-y-6">
+          <section className="rounded-lg border p-5">
+            <h2 className="text-lg font-semibold">Recommended Actions</h2>
+            <ul className="mt-3 space-y-2 text-sm">
               {actions.map((a, i) => (
-                <li key={i} className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-2.5">
-                  <RiskBadge level={a.priority} className="mt-0.5" />
-                  <span className="text-xs leading-snug">{a.label}</span>
+                <li key={i} className="flex items-start gap-2">
+                  <span className={`mt-1 inline-block h-2 w-2 rounded-full ${
+                    a.priority === "critical" ? "bg-destructive" :
+                    a.priority === "high" ? "bg-orange-500" : "bg-yellow-500"
+                  }`} />
+                  <span>{a.label}</span>
                 </li>
               ))}
             </ul>
-            <button className="mt-4 w-full rounded-md bg-critical px-3 py-2 text-xs font-medium text-critical-foreground hover:opacity-90">
-              Execute Containment Playbook
-            </button>
-          </div>
+          </section>
 
-          <div className="glass-panel rounded-xl p-5">
-            <div className="text-sm font-medium">Evidence Chain</div>
-            <ul className="mt-3 space-y-1.5 font-mono text-[11px] text-muted-foreground">
-              <li className="flex justify-between"><span>edr.events</span><span className="text-foreground">2,481</span></li>
-              <li className="flex justify-between"><span>idp.auth</span><span className="text-foreground">147</span></li>
-              <li className="flex justify-between"><span>dlp.flows</span><span className="text-foreground">38</span></li>
-              <li className="flex justify-between"><span>saas.audit</span><span className="text-foreground">612</span></li>
-              <li className="flex justify-between"><span>net.netflow</span><span className="text-foreground">19,204</span></li>
+          <section className="rounded-lg border p-5">
+            <h2 className="text-lg font-semibold">Evidence Chain</h2>
+            <ul className="mt-3 space-y-1 text-sm">
+              {evidence.length === 0 && <li className="text-muted-foreground">No evidence yet.</li>}
+              {evidence.map(([resource, count]) => (
+                <li key={resource} className="flex justify-between">
+                  <span className="truncate">{resource}</span>
+                  <span className="text-muted-foreground">{count}</span>
+                </li>
+              ))}
             </ul>
-          </div>
+          </section>
         </aside>
       </div>
     </div>

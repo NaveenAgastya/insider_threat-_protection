@@ -28,6 +28,7 @@ export interface Incident {
 export interface Report {
   id: string;
   title: string;
+  user_id: string;
   user: string;
   generated: string;
   confidence: number;
@@ -58,10 +59,18 @@ export const incidents: Incident[] = [
 ];
 
 export const reports: Report[] = [
-  { id: "RPT-2041", title: "Insider exfiltration via personal cloud", user: "Marcus Chen", generated: "2 minutes ago", confidence: 0.92, severity: "critical", summary: "Coordinated data movement and off-hours access patterns suggest deliberate exfiltration." },
-  { id: "RPT-2040", title: "Compromised credential — session hijack likely", user: "Priya Anand", generated: "14 minutes ago", confidence: 0.87, severity: "critical", summary: "Geo-impossible session reuse and anomalous user-agent fingerprint detected." },
-  { id: "RPT-2039", title: "Living-off-the-land privilege escalation", user: "Jordan Ellis", generated: "41 minutes ago", confidence: 0.74, severity: "high", summary: "Sequence of LOLBin invocations consistent with Earth Lusca tradecraft." },
+  {
+    id: "RPT-2041",
+    user_id: "USR00072",
+    title: "Insider exfiltration via personal cloud",
+    user: "amitabh.park",
+    generated: "2 minutes ago",
+    confidence: 0.92,
+    severity: "critical",
+    summary: "..."
+  },
 ];
+
 
 export function getUser(id: string) {
   return users.find((u) => u.id === id) ?? users[0];
