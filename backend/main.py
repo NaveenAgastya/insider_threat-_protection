@@ -182,3 +182,12 @@ def get_report(report_id: str):
 
     return report
 
+@app.get("/ml-results")
+def ml_results():
+
+    access_df = pd.read_csv("data_access_logs.csv")
+    profile_df = pd.read_csv("user_profiles.csv")
+
+    from risk_engine import get_ml_results
+
+    return get_ml_results(access_df, profile_df)
