@@ -105,33 +105,14 @@ export default function ReportDetail() {
   const [report, setReport] = useState<Report | null>(null);
   const [userDetails, setUserDetails] = useState<UserDetails | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
   if (!reportId) return;
 
-  console.log("Report ID from URL:", reportId);
-
-  fetch(`${baseUrl}/reports/${reportId}`)
-    .then(res => {
-      console.log("Status:", res.status);
-      return res.json();
-    })
-    .then(data => {
-      console.log("Report Data:", data);
-      setReport(data);
-    })
-    .catch(console.error);
-
-}, [reportId]);
-
-const [loading, setLoading] = useState(true);
-
-useEffect(() => {
-  if (!reportId) return;
-
   setLoading(true);
 
-  fetch(`${baseUrl}/reports/${reportId}`)
+  fetch(`${baseUrl}/report/${reportId}`)
     .then(res => {
       if (!res.ok) throw new Error();
       return res.json();
@@ -141,7 +122,32 @@ useEffect(() => {
     .finally(() => setLoading(false));
 }, [reportId]);
 
-if (loading) {
+
+useEffect(() => {
+  if (!report?.user_id) return;
+
+  Promise.all([
+    fetch(`${baseUrl}/user/${report.user_id}`).then(r => r.json()),
+    fetch(`${baseUrl}/user/${report.user_id}/activities`).then(r => r.json()),
+  ])
+    .then(([u, a]) => {
+      setUserDetails(u);
+      setActivities(Array.isArray(a) ? a : []);
+    })
+    .catch(console.error);
+}, [report]);
+
+//useMemo to avoid expensive recalculations on every render
+const aiNarrative = useMemo(
+    () => generateNarrative(userDetails, activities),
+    [userDetails, activities]
+  );
+
+  // Build recommended actions and evidence chain based on user details and activities
+  const actions = useMemo(() => buildActions(userDetails, activities), [userDetails, activities]);
+  const evidence = useMemo(() => buildEvidence(activities), [activities]);
+
+  if (loading) {
   return <div className="p-6">Loading...</div>;
 }
 
@@ -154,29 +160,7 @@ if (!report) {
   );
 }
 
-  useEffect(() => {
-    if (!report?.user_id) return;
-    Promise.all([
-      fetch(`${baseUrl}/user/${report.user_id}`).then(r => r.json()),
-      fetch(`${baseUrl}/user/${report.user_id}/activities`).then(r => r.json()),
-    ])
-      .then(([u, a]) => {
-        setUserDetails(u);
-        setActivities(Array.isArray(a) ? a : []);
-      })
-      .catch(console.error);
-  }, [report]);
 
-  const aiNarrative = useMemo(
-    () => generateNarrative(userDetails, activities),
-    [userDetails, activities]
-  );
-  const actions = useMemo(() => buildActions(userDetails, activities), [userDetails, activities]);
-  const evidence = useMemo(() => buildEvidence(activities), [activities]);
-
-  if (!report) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading report...</div>;
-  }
 
   return (
     <div className="p-6 space-y-6">

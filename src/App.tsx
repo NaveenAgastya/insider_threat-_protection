@@ -1,6 +1,6 @@
 import { Routes, Route, Link } from "react-router-dom";
 import { Bell, Search } from "lucide-react";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { useSidebar,SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import Dashboard from "@/pages/Dashboard";
 import Users from "@/pages/Users";
