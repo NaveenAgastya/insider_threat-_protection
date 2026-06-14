@@ -8,6 +8,7 @@ import UserDetail from "@/pages/UserDetail";
 import Incidents from "@/pages/Incidents";
 import Reports from "@/pages/Reports";
 import ReportDetail from "@/pages/ReportDetail";
+import EvaluationMetrics from "@/pages/EvaluationMetrics";
 import NotFound from "@/pages/NotFound";
 
 function TopBar() {
@@ -54,6 +55,7 @@ export default function App() {
               <Route path="/reports" element={<Reports />} />
               <Route path="/reports/:reportId" element={<ReportDetail />} />
               <Route path="*" element={<NotFound />} />
+              <Route path="/evaluation" element={<EvaluationMetrics />}/>
             </Routes>
           </main>
         </div>

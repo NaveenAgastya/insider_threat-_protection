@@ -18,6 +18,7 @@ const nav = [
   { title: "High-Risk Users", url: "/users", icon: Users },
   { title: "Incidents", url: "/incidents", icon: AlertTriangle },
   { title: "AI Reports", url: "/reports", icon: FileText },
+  { title: "Evaluation Metrics", url: "/evaluation", icon: FileText },
 ];
 
 const ops = [

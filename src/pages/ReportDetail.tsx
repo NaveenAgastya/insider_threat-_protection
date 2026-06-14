@@ -147,6 +147,29 @@ const aiNarrative = useMemo(
   const actions = useMemo(() => buildActions(userDetails, activities), [userDetails, activities]);
   const evidence = useMemo(() => buildEvidence(activities), [activities]);
 
+  const highSensitivity =
+  activities.filter(
+    a => a.resource_sensitivity === "high"
+  ).length;
+
+const offHours =
+  activities.filter(
+    a =>
+      a.time_classification === "night" ||
+      a.time_classification === "unusual_hours"
+  ).length;
+
+const adminOps =
+  activities.filter(
+    a => a.action === "admin_operation"
+  ).length;
+
+const riskScore =
+  highSensitivity * 10 +
+  offHours * 8 +
+  adminOps * 15;
+
+
   if (loading) {
   return <div className="p-6">Loading...</div>;
 }
@@ -202,6 +225,40 @@ if (!report) {
             </h2>
             <pre className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{aiNarrative}</pre>
           </section>
+
+          <section className="rounded-lg border p-5">
+  <h2 className="text-lg font-semibold">
+    Risk Breakdown
+  </h2>
+
+  <div className="mt-4 space-y-3 text-sm">
+
+    <div>
+      <div className="flex justify-between">
+        <span>High Sensitivity Access</span>
+        <span>{highSensitivity}</span>
+      </div>
+    </div>
+
+    <div>
+      <div className="flex justify-between">
+        <span>Off-Hours Activity</span>
+        <span>{offHours}</span>
+      </div>
+    </div>
+
+    <div>
+      <div className="flex justify-between">
+        <span>Administrative Operations</span>
+        <span>{adminOps}</span>
+      </div>
+    </div>
+
+    <div className="border-t pt-3 font-semibold">
+      Total Risk Score: {riskScore}
+    </div>
+  </div>
+</section>
 
           <section className="rounded-lg border p-5">
             <h2 className="text-lg font-semibold">Summary</h2>

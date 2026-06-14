@@ -181,3 +181,4 @@ def get_report(report_id: str):
         raise HTTPException(404)
 
     return report
+
