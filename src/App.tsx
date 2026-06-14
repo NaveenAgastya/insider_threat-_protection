@@ -31,9 +31,7 @@ function TopBar() {
           <Bell className="h-3.5 w-3.5" />
           <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-critical px-1 font-mono text-[9px] text-critical-foreground">7</span>
         </button>
-        <div className="hidden font-mono text-[10px] uppercase tracking-widest text-muted-foreground md:block">
-          UTC 14:34:08
-        </div>
+        
       </div>
     </header>
   );
